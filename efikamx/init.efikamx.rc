@@ -1,0 +1,145 @@
+on boot
+    setprop hwui.debug_level 2
+
+    setprop ro.hwui.texture_cache_size 48.0f
+    setprop ro.hwui.layer_cache_size 32.0f
+    setprop ro.hwui.gradient_cache_size 2.0f
+    setprop ro.hwui.path_cache_size 4.0f
+    setprop ro.hwui.shape_cache_size 2.0f
+    setprop ro.hwui.drop_shadow_cache_size 4.0f
+    setprop ro.hwui.fbo_cache_size 32
+    setprop ro.hwui.texture_cache_flush_rate 1.0f
+#    setprop ro.hwui.text_cache_width 
+#    setprop ro.hwui.text_cache_height
+
+    chmod 0777 /dev/mpu
+    chmod 0777 /dev/mpuirq
+    chmod 0777 /dev/accelirq
+    chmod 0777 /dev/timerirq
+    chmod 0777 /dev/pixcir_i2c_ts0
+
+    chmod 0777 /data/misc/vpn
+
+    # Set permission for IIM node
+    symlink /dev/mxc_iim /dev/mxc_mem
+
+    #symlink /dev/ttymxc1 /dev/gpsdevice
+    #setprop ro.kernel.android.gps ttya
+    #export uart2 and set the default value
+    #write /sys/class/gpio/export 44
+    #write /sys/class/gpio/gpio44/direction "out"
+    #write /sys/class/gpio/gpio44/value 1
+
+    # 3D acceleration property
+    setprop debug.sf.showfps    0
+    setprop debug.sf.hw         1
+    setprop debug.egl.hw        1
+    setprop hwui.render_dirty_regions true
+
+    setprop debug.sf.enable_hgl 0
+    setprop debug.egl.hw 0
+    setprop ro.kernel.qemu 1
+    setprop ro.kernel.qemu.gles 1
+            
+    # fsl omx graphic manager media framework property
+    setprop media.omxgm.enable-player 0
+    setprop media.omxgm.enable-record 0
+    setprop media.omxgm.enable-scan 0
+    setprop rw.VIDEO_RENDER_NAME video_render.surface
+
+    #Define the config for dual camera
+    #For landscape mode, orient is 0
+    #For portrait mode, orient is 90
+    #the android before honycomb are all in portrait mode
+    setprop back_camera_name ov
+    setprop back_camera_orient 0
+
+    # Set OpenGLES version
+    setprop ro.opengles.version 131072
+
+    # Disable UI output for second display during video playback
+    setprop ro.secfb.disable-overlay  1
+
+    # Enable auto configuration with 1, disable with 0
+    #setprop ro.AUTO_CONFIG_DISPLAY  1
+
+    # Set rotation to 270 to cofigure as portrait mode
+    #setprop ro.sf.hwrotation 0
+
+    # hdmi audio output
+    setprop ro.HDMI_AUDIO_OUTPUT 1
+
+    # Set light sensor sysfs path and light sensor threshold lux value
+    #setprop ro.hardware.lightsensor "/sys/class/i2c-dev/i2c-2/device/2-0044/"
+    #setprop ro.lightsensor.threshold  20
+
+    # Set mag3110 sensor sysfs path
+    #setprop ro.hardware.magsensor "/sys/class/i2c-dev/i2c-1/device/1-000e/"
+    #setprop ro.sensor.mag_cfg_file  "/system/etc/magd.conf"
+
+    # wifi ap interface
+    setprop wifi.ap.interface wlan0
+
+    # Set video overlay display mode
+    setprop rw.VIDEO_OVERLAY_DISPLAY 1
+
+    # Enable adbd
+    setprop persist.service.adb.enable 1
+
+    # elija wlan
+    insmod /system/lib/modules/mlan.ko
+    insmod /system/lib/modules/sd8xxx.ko
+    insmod /system/lib/modules/bt8xxx.ko
+
+    setprop wifi.interface wlan0
+    setprop wlan.driver.status ok
+
+    setprop ctl.start dhcpcd_wlan0
+
+    # enable KSM
+    write /sys/kernel/mm/ksm/sleep_millisecs 4000
+    write /sys/kernel/mm/ksm/pages_to_scan 128
+    write /sys/kernel/mm/ksm/run 1
+    
+#service calibration_tool /system/bin/calibration_tool
+service calibration_tool /system/bin/calibration_tool pixcir
+        user root
+        oneshot
+
+service wpa_supplicant /system/bin/wpa_supplicant \
+        -Dwext -iwlan0 -c/data/misc/wifi/wpa_supplicant.conf
+        #  we will start as root and wpa_supplicant will switch to user wifi
+        #  after setting up the capabilities required for AWEXT
+        #  user wifi
+        #  group wifi inet keystore
+        class main
+        socket wpa_wlan0 dgram 660 wifi wifi
+        disabled
+        oneshot
+
+on post-fs-data
+        mkdir /data/misc/wifi 0770 wifi wifi
+        mkdir /data/misc/wifi/sockets 0770 wifi wifi
+        mkdir /data/misc/dhcp 0770 dhcp dhcp
+        chown dhcp dhcp /data/misc/dhcp
+        mkdir /data/misc/vpn 0770 dhcp dhcp
+        chown vpn vpn /data/misc/vpn
+
+        setprop vold.post_fs_data_done 1
+
+on early-init
+        export EXTERNAL_STORAGE /mnt/sdcard
+        mkdir /mnt/sdcard 0000 system system
+        # for backwards compatibility
+        symlink /mnt/sdcard /sdcard
+
+on fs
+    mount ext4 /dev/block/mmcblk0p6 /cache nosuid nodev
+    mount ext4 /dev/block/mmcblk0p5 /data nosuid nodev
+    mount vfat /dev/block/mmcblk0p2 /mnt/sdcard nosuid nodev
+
+# create virtual SD card at /mnt/sdcard, based on the /data/media directory
+# daemon will drop to user/group system/media_rw after initializing
+# underlying files in /data/media will be created with user and group media_rw
+#service sdcard /system/bin/sdcard /data/media 1023 1023
+#        class late_start
